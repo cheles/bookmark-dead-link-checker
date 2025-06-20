@@ -164,6 +164,22 @@
       color: #fbbc04;
       font-weight: bold;
     }
+
+    .log-dead {
+      color: #ea4335;
+    }
+
+    #confirmationDialog {
+      margin: 15px 0;
+    }
+
+    #confirmDeleteBtn:hover:not(:disabled) {
+      background: #d33b2c !important;
+    }
+
+    #cancelDeleteBtn:hover:not(:disabled) {
+      background: #555 !important;
+    }
   </style>
 </head>
 
@@ -207,6 +223,25 @@
     <button id="startBtn">Start Checking</button>
     <button id="stopBtn" class="stop-btn" style="display: none;">Stop</button>
     <button id="restoreBtn" style="display: none;">Restore Backup</button>
+  </div>
+
+  <div id="confirmationDialog" style="display: none;">
+    <div
+      style="background: white; border-radius: 8px; padding: 15px; margin: 15px 0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+      <h3 style="margin: 0 0 10px 0; color: #ea4335;">⚠️ Dead Bookmarks Found</h3>
+      <p style="margin: 5px 0; color: #666; font-size: 14px;">Found <span id="deadBookmarkCount">0</span> dead
+        bookmark(s). Do you want to delete them?</p>
+
+      <div id="deadBookmarksList"
+        style="max-height: 150px; overflow-y: auto; margin: 10px 0; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 12px;">
+        <!-- Dead bookmarks will be listed here -->
+      </div>
+
+      <div style="text-align: center; margin-top: 15px;">
+        <button id="confirmDeleteBtn" style="background: #ea4335; margin-right: 10px;">Delete Dead Bookmarks</button>
+        <button id="cancelDeleteBtn" style="background: #666;">Keep Bookmarks</button>
+      </div>
+    </div>
   </div>
 
   <div class="log" id="log" style="display: none;"></div>

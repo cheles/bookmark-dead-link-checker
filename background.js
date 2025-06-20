@@ -11,6 +11,7 @@ let currentStats = {
 };
 let backupData = null;
 let processingState = null;
+let deadBookmarks = []; // Store dead bookmarks for confirmation
 
 // Extension installation/update handler
 chrome.runtime.onInstalled.addListener((details) => {
@@ -74,9 +75,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             } else {
                 sendResponse({ success: false, error: 'No backup available' });
             }
-            return true;
-
-        case 'RESTORE_BACKUP_FROM_DATA':
+            return true; case 'RESTORE_BACKUP_FROM_DATA':
             if (message.backupData) {
                 restoreBackupFromData(message.backupData).then(result => {
                     sendResponse(result);
@@ -85,6 +84,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 });
             } else {
                 sendResponse({ success: false, error: 'No backup data provided' });
+            }
+            return true; case 'CONFIRM_DELETION':
+            if (message.confirmed && deadBookmarks.length > 0) {
+                deleteDeadBookmarks().then(result => {
+                    sendResponse(result);
+                }).catch(error => {
+                    sendResponse({ success: false, error: error.message });
+                });
+            } else {
+                // User cancelled or no bookmarks to delete
+                deadBookmarks = [];
+                currentStats.dead = 0;
+                broadcastMessage({ type: 'DELETION_CANCELLED', stats: currentStats });
+                sendResponse({ success: true, cancelled: true });
             }
             return true;
 
@@ -139,13 +152,12 @@ async function startBackgroundChecking() {
             if (!backupResult.success) {
                 return { success: false, error: 'Failed to create backup: ' + backupResult.error };
             }
-        }
-
-        isRunning = true;
+        } isRunning = true;
         shouldStop = false;
 
-        // Reset stats
+        // Reset stats and dead bookmarks list
         currentStats = { total: 0, checked: 0, dead: 0, removed: 0 };
+        deadBookmarks = [];
 
         // Get all bookmarks
         const bookmarks = await getAllBookmarks();
@@ -177,13 +189,20 @@ async function startBackgroundChecking() {
             }
         }
 
-        isRunning = false;
-
-        if (!shouldStop) {
-            console.log(`Background checking complete! Removed ${currentStats.removed} dead bookmarks.`);
-            broadcastMessage({ type: 'CHECKING_COMPLETE', stats: currentStats });
+        isRunning = false; if (!shouldStop) {
+            console.log(`Background checking complete! Found ${currentStats.dead} dead bookmarks.`);
+            if (currentStats.dead > 0) {
+                broadcastMessage({
+                    type: 'CHECKING_COMPLETE_CONFIRM',
+                    stats: currentStats,
+                    deadBookmarks: deadBookmarks
+                });
+            } else {
+                broadcastMessage({ type: 'CHECKING_COMPLETE', stats: currentStats });
+            }
         } else {
             console.log('Background checking stopped by user.');
+            deadBookmarks = []; // Clear dead bookmarks if stopped
             broadcastMessage({ type: 'CHECKING_STOPPED', stats: currentStats });
         }
 
@@ -213,20 +232,20 @@ async function checkBookmark(bookmark) {
 
         if (!isAlive) {
             currentStats.dead++;
-            console.log(`Dead link: ${bookmark.title} - ${bookmark.url}`);
+            // Store dead bookmark for later confirmation
+            deadBookmarks.push({
+                id: bookmark.id,
+                title: bookmark.title || 'Untitled',
+                url: bookmark.url
+            });
 
-            // Remove the dead bookmark
-            await chrome.bookmarks.remove(bookmark.id);
-            currentStats.removed++;
-            console.log(`Removed: ${bookmark.title}`);
+            console.log(`Dead link found: ${bookmark.title} - ${bookmark.url}`);
 
-            // Broadcast removal
+            // Broadcast dead link found (but not removed yet)
             broadcastMessage({
-                type: 'BOOKMARK_REMOVED',
+                type: 'DEAD_BOOKMARK_FOUND',
                 bookmark: { title: bookmark.title, url: bookmark.url }
             });
-        } else {
-            console.log(`Alive: ${bookmark.title}`);
         }
 
     } catch (error) {
@@ -452,3 +471,49 @@ chrome.runtime.onMessage.addListener((message) => {
         stopKeepAlive();
     }
 });
+
+// Delete confirmed dead bookmarks
+async function deleteDeadBookmarks() {
+    try {
+        console.log(`Deleting ${deadBookmarks.length} confirmed dead bookmarks...`);
+
+        let deletedCount = 0;
+
+        for (const bookmark of deadBookmarks) {
+            try {
+                await chrome.bookmarks.remove(bookmark.id);
+                deletedCount++;
+                currentStats.removed++;
+
+                console.log(`Deleted dead bookmark: ${bookmark.title} - ${bookmark.url}`);
+
+                // Broadcast individual bookmark removal
+                broadcastMessage({
+                    type: 'BOOKMARK_REMOVED',
+                    bookmark: bookmark
+                });
+
+            } catch (error) {
+                console.error(`Failed to delete bookmark ${bookmark.title}:`, error);
+            }
+        }
+
+        // Clear the dead bookmarks list
+        deadBookmarks = [];
+
+        console.log(`Successfully deleted ${deletedCount} dead bookmarks`);
+
+        // Broadcast completion
+        broadcastMessage({
+            type: 'DELETION_COMPLETE',
+            stats: currentStats,
+            deletedCount: deletedCount
+        });
+
+        return { success: true, deletedCount: deletedCount };
+
+    } catch (error) {
+        console.error('Error deleting dead bookmarks:', error);
+        return { success: false, error: error.message };
+    }
+}

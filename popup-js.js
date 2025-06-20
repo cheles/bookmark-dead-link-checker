@@ -27,7 +27,12 @@ class BookmarkChecker {
       progressContainer: document.getElementById('progressContainer'),
       progressFill: document.getElementById('progressFill'),
       progressText: document.getElementById('progressText'),
-      log: document.getElementById('log')
+      log: document.getElementById('log'),
+      confirmationDialog: document.getElementById('confirmationDialog'),
+      deadBookmarkCount: document.getElementById('deadBookmarkCount'),
+      deadBookmarksList: document.getElementById('deadBookmarksList'),
+      confirmDeleteBtn: document.getElementById('confirmDeleteBtn'),
+      cancelDeleteBtn: document.getElementById('cancelDeleteBtn')
     };
   }
 
@@ -36,6 +41,8 @@ class BookmarkChecker {
     this.elements.startBtn.addEventListener('click', () => this.startChecking());
     this.elements.stopBtn.addEventListener('click', () => this.stopChecking());
     this.elements.restoreBtn.addEventListener('click', () => this.restoreBackup());
+    this.elements.confirmDeleteBtn.addEventListener('click', () => this.confirmDeletion(true));
+    this.elements.cancelDeleteBtn.addEventListener('click', () => this.confirmDeletion(false));
   }
 
   setupMessageListener() {
@@ -61,27 +68,56 @@ class BookmarkChecker {
           this.updateProgress(message.progress, `Processed ${message.processed} of ${this.stats.total} bookmarks`);
           break;
 
+        case 'DEAD_BOOKMARK_FOUND':
+          this.log(`💀 Dead link found: ${message.bookmark.title}`, 'dead');
+          break;
+
         case 'BOOKMARK_REMOVED':
-          this.log(`💀 Dead link removed: ${message.bookmark.title}`, 'removed');
+          this.log(`🗑️ Removed: ${message.bookmark.title}`, 'removed');
           break;
 
         case 'CHECKING_COMPLETE':
           this.stats = message.stats;
           this.updateStats();
           this.updateProgress(100, 'Checking complete!');
-          this.log(`✅ Checking complete! Removed ${this.stats.removed} dead bookmarks.`);
+          this.log(`✅ Checking complete! Found ${this.stats.dead} dead bookmarks, removed ${this.stats.removed}.`);
           this.showIdleState();
+          break;
+
+        case 'CHECKING_COMPLETE_CONFIRM':
+          this.stats = message.stats;
+          this.updateStats();
+          this.updateProgress(100, 'Checking complete - awaiting confirmation');
+          this.log(`⚠️ Found ${this.stats.dead} dead bookmarks. Please confirm deletion.`);
+          this.showConfirmationDialog(message.deadBookmarks);
+          this.showIdleState();
+          break;
+
+        case 'DELETION_COMPLETE':
+          this.stats = message.stats;
+          this.updateStats();
+          this.hideConfirmationDialog();
+          this.log(`✅ Successfully deleted ${message.deletedCount} dead bookmarks.`);
+          break;
+
+        case 'DELETION_CANCELLED':
+          this.stats = message.stats;
+          this.updateStats();
+          this.hideConfirmationDialog();
+          this.log('ℹ️ Bookmark deletion cancelled by user.');
           break;
 
         case 'CHECKING_STOPPED':
           this.stats = message.stats;
           this.updateStats();
           this.log('⏹️ Checking stopped by user.');
+          this.hideConfirmationDialog();
           this.showIdleState();
           break;
 
         case 'CHECKING_ERROR':
           this.log(`❌ Error: ${message.error}`, 'error');
+          this.hideConfirmationDialog();
           this.showIdleState();
           break;
 
@@ -301,6 +337,7 @@ class BookmarkChecker {
     this.elements.startBtn.style.display = 'none';
     this.elements.stopBtn.style.display = 'inline-block';
     this.elements.restoreBtn.style.display = 'none';
+    this.hideConfirmationDialog();
   }
 
   showIdleState() {
@@ -358,6 +395,69 @@ class BookmarkChecker {
     if (this.elements.log.style.display === 'none') {
       this.elements.log.style.display = 'block';
     }
+  }
+
+  async confirmDeletion(confirmed) {
+    try {
+      this.elements.confirmDeleteBtn.disabled = true;
+      this.elements.cancelDeleteBtn.disabled = true;
+
+      if (confirmed) {
+        this.elements.confirmDeleteBtn.textContent = 'Deleting...';
+        this.log('🗑️ Deleting confirmed dead bookmarks...');
+      } else {
+        this.elements.cancelDeleteBtn.textContent = 'Cancelling...';
+        this.log('ℹ️ Cancelling bookmark deletion...');
+      }
+
+      const response = await chrome.runtime.sendMessage({
+        type: 'CONFIRM_DELETION',
+        confirmed: confirmed
+      });
+
+      if (response.success) {
+        if (confirmed) {
+          this.log(`✅ Successfully deleted ${response.deletedCount} dead bookmarks.`);
+        } else {
+          this.log('ℹ️ Bookmark deletion cancelled.');
+        }
+      } else {
+        this.log(`❌ Error: ${response.error}`, 'error');
+      }
+
+    } catch (error) {
+      console.error('Error handling confirmation:', error);
+      this.log('❌ Failed to process confirmation', 'error');
+    } finally {
+      this.elements.confirmDeleteBtn.disabled = false;
+      this.elements.cancelDeleteBtn.disabled = false;
+      this.elements.confirmDeleteBtn.textContent = 'Delete Dead Bookmarks';
+      this.elements.cancelDeleteBtn.textContent = 'Keep Bookmarks';
+    }
+  }
+
+  showConfirmationDialog(deadBookmarks) {
+    this.elements.deadBookmarkCount.textContent = deadBookmarks.length;
+
+    // Clear previous list
+    this.elements.deadBookmarksList.innerHTML = '';
+
+    // Add dead bookmarks to the list
+    deadBookmarks.forEach(bookmark => {
+      const bookmarkItem = document.createElement('div');
+      bookmarkItem.style.cssText = 'margin: 4px 0; padding: 4px; border-left: 3px solid #ea4335; background: white; border-radius: 2px;';
+      bookmarkItem.innerHTML = `
+        <div style="font-weight: bold; color: #333; margin-bottom: 2px;">${bookmark.title}</div>
+        <div style="color: #666; font-size: 11px; word-break: break-all;">${bookmark.url}</div>
+      `;
+      this.elements.deadBookmarksList.appendChild(bookmarkItem);
+    });
+
+    this.elements.confirmationDialog.style.display = 'block';
+  }
+
+  hideConfirmationDialog() {
+    this.elements.confirmationDialog.style.display = 'none';
   }
 }
 

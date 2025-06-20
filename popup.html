@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 350px;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8f9fa;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      color: #1a73e8;
+      font-size: 18px;
+      margin: 0;
+    }
+
+    .stats {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      margin: 8px 0;
+    }
+
+    .stat-label {
+      color: #666;
+    }
+
+    .stat-value {
+      font-weight: bold;
+      color: #333;
+    }
+
+    .controls {
+      text-align: center;
+    }
+
+    button {
+      background: #1a73e8;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      margin: 5px;
+      transition: background 0.2s;
+      display: inline-block;
+    }
+
+    #backupBtn {
+      background: #34a853;
+    }
+
+    #backupBtn:hover:not(:disabled) {
+      background: #2d8f47;
+    }
+
+    #restoreBtn {
+      background: #fbbc04;
+      color: #333;
+    }
+
+    #restoreBtn:hover:not(:disabled) {
+      background: #f9ab00;
+    }
+
+    button:hover:not(:disabled) {
+      background: #1557b0;
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .stop-btn {
+      background: #ea4335;
+    }
+
+    .stop-btn:hover:not(:disabled) {
+      background: #d33b2c;
+    }
+
+    .progress-container {
+      margin: 15px 0;
+      display: none;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: #1a73e8;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    .progress-text {
+      text-align: center;
+      margin-top: 8px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .log {
+      background: white;
+      border-radius: 8px;
+      padding: 10px;
+      margin-top: 15px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-size: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .log-item {
+      padding: 4px 0;
+      border-bottom: 1px solid #eee;
+    }
+
+    .log-item:last-child {
+      border-bottom: none;
+    }
+
+    .log-dead {
+      color: #ea4335;
+    }
+
+    .log-alive {
+      color: #34a853;
+    }
+
+    .log-removed {
+      color: #ea4335;
+    }
+
+    .log-backup {
+      color: #34a853;
+      font-weight: bold;
+    }
+
+    .log-restore {
+      color: #fbbc04;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <h1>🔗 Bookmark Checker</h1>
+  </div>
+
+  <div class="stats">
+    <div class="stat-item">
+      <span class="stat-label">Total Bookmarks:</span>
+      <span class="stat-value" id="totalBookmarks">-</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Checked:</span>
+      <span class="stat-value" id="checkedCount">0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Dead Links:</span>
+      <span class="stat-value" id="deadCount">0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Removed:</span>
+      <span class="stat-value" id="removedCount">0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Backup:</span>
+      <span class="stat-value" id="backupStatus">Not created</span>
+    </div>
+  </div>
+
+  <div class="progress-container" id="progressContainer">
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-text" id="progressText">Preparing...</div>
+  </div>
+
+  <div class="controls">
+    <button id="backupBtn">Create Backup Only</button>
+    <button id="startBtn">Start Checking</button>
+    <button id="stopBtn" class="stop-btn" style="display: none;">Stop</button>
+    <button id="restoreBtn" style="display: none;">Restore Backup</button>
+  </div>
+
+  <div class="log" id="log" style="display: none;"></div>
+
+  <div style="text-align: center; margin-top: 15px; font-size: 11px; color: #999;">
+    Developed by CC
+  </div>
+
+  <script src="popup-js.js"></script>
+</body>
+
+</html>

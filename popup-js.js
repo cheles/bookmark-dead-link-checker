@@ -125,6 +125,12 @@ class BookmarkChecker {
           this.log('✅ Bookmarks restored successfully!', 'restore');
           this.loadStatus(); // Reload the bookmark count
           break;
+
+        case 'BACKUP_CLEARED':
+          this.updateBackupStatus('Not created');
+          this.elements.restoreBtn.style.display = 'none';
+          this.log('🧹 Backup data cleared', 'info');
+          break;
       }
     });
   }
@@ -146,14 +152,32 @@ class BookmarkChecker {
       }
 
       if (response.backupExists) {
-        this.updateBackupStatus('✅ Available');
+        const timestamp = response.backupTimestamp;
+        if (timestamp) {
+          const date = new Date(timestamp).toLocaleString();
+          this.updateBackupStatus(`✅ Created ${date}`);
+        } else {
+          this.updateBackupStatus('✅ Available');
+        }
         this.elements.restoreBtn.style.display = 'inline-block';
+      } else {
+        this.updateBackupStatus('Not created');
+        this.elements.restoreBtn.style.display = 'none';
       }
 
       // Load bookmark count
       const bookmarks = await this.getAllBookmarks();
       this.stats.total = bookmarks.length;
       this.updateStats();
+
+      // Check if awaiting confirmation
+      if (response.awaitingConfirmation && response.deadBookmarks.length > 0) {
+        this.log(`⚠️ Found ${response.deadBookmarks.length} dead bookmarks. Please confirm deletion.`);
+        this.showConfirmationDialog(response.deadBookmarks);
+        this.updateProgress(100, 'Checking complete - awaiting confirmation');
+        this.elements.progressContainer.style.display = 'block';
+        this.elements.log.style.display = 'block';
+      }
 
     } catch (error) {
       console.error('Error loading status:', error);
@@ -459,9 +483,30 @@ class BookmarkChecker {
   hideConfirmationDialog() {
     this.elements.confirmationDialog.style.display = 'none';
   }
+
+  // Debug method to clear backup data (can be called from console)
+  async clearBackupData() {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'CLEAR_BACKUP' });
+      if (response.success) {
+        this.log('🧹 Backup data cleared', 'info');
+        this.updateBackupStatus('Not created');
+        this.elements.restoreBtn.style.display = 'none';
+      } else {
+        this.log(`❌ Failed to clear backup: ${response.error}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error clearing backup:', error);
+      this.log('❌ Failed to clear backup', 'error');
+    }
+  }
 }
 
 // Initialize the bookmark checker when the popup loads
 document.addEventListener('DOMContentLoaded', () => {
-  new BookmarkChecker();
+  const checker = new BookmarkChecker();
+
+  // Make debug methods available in console
+  window.clearBackupData = () => checker.clearBackupData();
+  window.bookmarkChecker = checker;
 });

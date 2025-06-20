@@ -38,7 +38,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({
                 isRunning: isRunning,
                 stats: currentStats,
-                backupExists: !!backupData
+                backupExists: !!backupData,
+                backupTimestamp: backupData ? backupData.timestamp : null,
+                awaitingConfirmation: deadBookmarks.length > 0,
+                deadBookmarks: deadBookmarks
             });
             break;
 
@@ -85,6 +88,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             } else {
                 sendResponse({ success: false, error: 'No backup data provided' });
             }
+            return true; case 'CLEAR_BACKUP':
+            chrome.storage.local.remove(['bookmarkBackup', 'backupTimestamp']).then(() => {
+                backupData = null;
+                console.log('Backup data cleared');
+                broadcastMessage({ type: 'BACKUP_CLEARED' });
+                sendResponse({ success: true });
+            }).catch(error => {
+                sendResponse({ success: false, error: error.message });
+            });
             return true; case 'CONFIRM_DELETION':
             if (message.confirmed && deadBookmarks.length > 0) {
                 deleteDeadBookmarks().then(result => {
@@ -439,8 +451,16 @@ function delay(ms) {
 // Load existing backup on startup
 chrome.storage.local.get(['bookmarkBackup']).then(result => {
     if (result.bookmarkBackup) {
-        backupData = result.bookmarkBackup;
-        console.log('Existing backup loaded');
+        // Validate backup structure
+        if (result.bookmarkBackup.tree && result.bookmarkBackup.version && result.bookmarkBackup.timestamp) {
+            backupData = result.bookmarkBackup;
+            console.log('Existing backup loaded from:', new Date(result.bookmarkBackup.timestamp).toLocaleString());
+        } else {
+            console.log('Invalid backup data found, clearing...');
+            chrome.storage.local.remove(['bookmarkBackup', 'backupTimestamp']);
+        }
+    } else {
+        console.log('No existing backup found');
     }
 });
 
